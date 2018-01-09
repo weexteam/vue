@@ -20,6 +20,7 @@
   "dependencies": {
     "acorn": "^5.2.1",
     "escodegen": "^1.8.1",
-    "he": "^1.1.0"
+    "he": "^1.1.0",
+    "vue-template-es2015-compiler": "^1.6.0"
   }
 }

@@ -25,6 +25,7 @@ function initVirtualComponent (options: Object = {}) {
 
   // a flag to avoid this being observed
   vm._isVue = true
+  // vm._isVirtualComponent = true
   // merge options
   if (options && options._isComponent) {
     // optimize internal component instantiation
@@ -57,12 +58,12 @@ function initVirtualComponent (options: Object = {}) {
   callHook(vm, 'created')
 
   // send initial data to native
-  const data = vm.$options.data
-  const params = typeof data === 'function'
-    ? getData(data, vm)
-    : data || {}
-  if (isPlainObject(params)) {
-    updateComponentData(componentId, params)
+  const _data = vm.$options.data
+  const data = typeof _data === 'function'
+    ? getData(_data, vm)
+    : _data || {}
+  if (isPlainObject(data)) {
+    updateComponentData(componentId, data)
   }
 
   registerComponentHook(componentId, 'lifecycle', 'attach', () => {
@@ -72,6 +73,13 @@ function initVirtualComponent (options: Object = {}) {
       vm._update(vm._vnode, false)
     }
     new Watcher(vm, updateComponent, noop, null, true)
+
+    // watch all keys in data and send mutation to native
+    Object.keys(data).forEach(key => {
+      vm.$watch(key, (newValue) => {
+        updateComponentData(componentId, { [key]: newValue })
+      }, { deep: true })
+    })
 
     vm._isMounted = true
     callHook(vm, 'mounted')
@@ -99,38 +107,73 @@ function updateVirtualComponent (vnode?: VNode) {
   }
 }
 
+function initVirtualComponentTemplate (options: Object = {}) {
+  const vm: Component = this
+
+  // virtual component template uid
+  vm._uid = `virtual-component-template-${uid++}`
+
+  // a flag to avoid this being observed
+  vm._isVue = true
+  // merge options
+  if (options && options._isComponent) {
+    // optimize internal component instantiation
+    // since dynamic options merging is pretty slow, and none of the
+    // internal component options needs special treatment.
+    initInternalComponent(vm, options)
+  } else {
+    vm.$options = mergeOptions(
+      resolveConstructorOptions(vm.constructor),
+      options || {},
+      vm
+    )
+  }
+
+  vm._self = vm
+  initEvents(vm)
+  initRender(vm)
+  initState(vm)
+
+  this.registerVirtualComponent()
+}
+
 // listening on native callback
 export function resolveVirtualComponent (vnode: MountedComponentVNode): VNode {
   const BaseCtor = vnode.componentOptions.Ctor
   const VirtualComponent = BaseCtor.extend({})
-  const cid = VirtualComponent.cid
   VirtualComponent.prototype._init = initVirtualComponent
   VirtualComponent.prototype._update = updateVirtualComponent
 
   vnode.componentOptions.Ctor = BaseCtor.extend({
-    beforeCreate () {
-      // const vm: Component = this
+    methods: {
+      registerVirtualComponent () {
+        const vm: Component = this
+        vm._virtualComponents = {}
 
-      // TODO: listen on all events and dispatch them to the
-      // corresponding virtual components according to the componentId.
-      // vm._virtualComponents = {}
-      const createVirtualComponent = (componentId, propsData) => {
-        // create virtual component
-        // const subVm =
-        new VirtualComponent({
-          componentId,
-          propsData
-        })
-        // if (vm._virtualComponents) {
-        //   vm._virtualComponents[componentId] = subVm
-        // }
+        registerComponentHook(
+          String(vm._uid),
+          'lifecycle',
+          'create',
+
+          // create virtual component
+          (componentId, propsData) => {
+            const subVm = new VirtualComponent({
+              componentId,
+              propsData
+            })
+            subVm._uid = componentId
+            if (vm._virtualComponents) {
+              vm._virtualComponents[componentId] = subVm
+            }
+          }
+        )
+      },
+      destroyVirtualComponents () {
+        delete this._virtualComponents
       }
-
-      registerComponentHook(cid, 'lifecycle', 'create', createVirtualComponent)
-    },
-    beforeDestroy () {
-      delete this._virtualComponents
     }
   })
+  vnode.componentOptions.Ctor.prototype._init = initVirtualComponentTemplate
+  vnode.componentOptions.Ctor.prototype._update = noop
 }
 

@@ -145,7 +145,7 @@ describe('Usage', () => {
 
           // trigger component hooks
           instance.$triggerHook(
-            2, // cid of the virtual component template
+            'virtual-component-template-0', // uid of the virtual component template
             'create', // lifecycle hook name
 
             // arguments for the callback
@@ -154,7 +154,7 @@ describe('Usage', () => {
               { start: 3 } // propsData of the virtual component
             ]
           )
-          instance.$triggerHook(2, 'create', ['x-2', { start: 11 }])
+          instance.$triggerHook('virtual-component-template-0', 'create', ['x-2', { start: 11 }])
 
           // the state (_data) of the virtual component should be sent to native
           expect(tasks.length).toEqual(2)
@@ -173,9 +173,10 @@ describe('Usage', () => {
           const event = getEvents(instance)[0]
           fireEvent(instance, event.ref, 'click', { componentId: 'x-1' })
           setTimeout(() => {
-            // expect(tasks.length).toEqual(1)
-            // expect(tasks[0].method).toEqual('updateComponentData')
-            // expect(tasks[0].args).toEqual([{ count: 7 }])
+            expect(tasks.length).toEqual(1)
+            expect(tasks[0].method).toEqual('updateComponentData')
+            expect(tasks[0].args[0]).toEqual('x-1')
+            expect(tasks[0].args[1]).toEqual({ count: 7 })
             instance.$destroy()
             resetTaskHook()
             done()
@@ -184,38 +185,36 @@ describe('Usage', () => {
       }).catch(done.fail)
     })
 
-    // it('component lifecycle', done => {
-    //   global.__lifecycles = []
-    //   compileWithDeps('recycle-list/components/stateful-lifecycle.vue', [{
-    //     name: 'lifecycle',
-    //     path: 'recycle-list/components/lifecycle.vue'
-    //   }]).then(code => {
-    //     const id = String(Date.now() * Math.random())
-    //     const instance = createInstance(id, code)
-    //     setTimeout(() => {
-    //       const target = readObject('recycle-list/components/stateful-lifecycle.vdom.js')
-    //       expect(getRoot(instance)).toEqual(target)
+    it('component lifecycle', done => {
+      global.__lifecycles = []
+      compileWithDeps('recycle-list/components/stateful-lifecycle.vue', [{
+        name: 'lifecycle',
+        path: 'recycle-list/components/lifecycle.vue'
+      }]).then(code => {
+        const id = String(Date.now() * Math.random())
+        const instance = createInstance(id, code)
+        setTimeout(() => {
+          const target = readObject('recycle-list/components/stateful-lifecycle.vdom.js')
+          expect(getRoot(instance)).toEqual(target)
 
-    //       instance.$triggerHook(2, 'create', ['y-1'])
-    //       instance.$triggerHook('y-1', 'attach')
-    //       instance.$triggerHook('y-1', 'detach')
-    //       expect(global.__lifecycles).toEqual([
-    //         'beforeCreate undefined',
-    //         'created 0',
-    //         'beforeMount 1',
-    //         'mounted 1',
-    //         'beforeUpdate 2',
-    //         'updated 2',
-    //         'beforeDestroy 2',
-    //         'destroyed 2'
-    //       ])
+          instance.$triggerHook('virtual-component-template-0', 'create', ['y-1'])
+          instance.$triggerHook('y-1', 'attach')
+          instance.$triggerHook('y-1', 'detach')
+          expect(global.__lifecycles).toEqual([
+            'beforeCreate undefined',
+            'created 0',
+            'beforeMount 1',
+            'mounted 1',
+            'beforeDestroy 2',
+            'destroyed 2'
+          ])
 
-    //       delete global.__lifecycles
-    //       instance.$destroy()
-    //       done()
-    //     }, 50)
-    //   }).catch(done.fail)
-    // })
+          delete global.__lifecycles
+          instance.$destroy()
+          done()
+        }, 50)
+      }).catch(done.fail)
+    })
 
     it('stateful component with v-model', done => {
       compileWithDeps('recycle-list/components/stateful-v-model.vue', [{
