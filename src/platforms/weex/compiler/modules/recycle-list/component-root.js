@@ -10,6 +10,7 @@ export function postTransformComponentRoot (
   if (!el.parent) {
     // component root
     addAttr(el, '@isComponentRoot', 'true')
+    addAttr(el, '@componentId', '_uid')
     addAttr(el, '@componentProps', '$props || {}')
   }
 }

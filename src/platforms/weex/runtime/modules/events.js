@@ -1,5 +1,6 @@
 /* @flow */
 
+import { handleError } from 'core/util/index'
 import { updateListeners } from 'core/vdom/helpers/update-listeners'
 
 let target: any
@@ -50,12 +51,16 @@ function add (
     const formerHandler = handler
     handler = function virtualHandler (...args) {
       const componentId = (args[0] || {}).componentId
-      let context = this
+      let context = this._context
       if (componentId && this._context) {
         const vcs = this._context._virtualComponents || {}
         context = vcs[componentId] || context
       }
-      invokeHandler(formerHandler, args, context)
+      try {
+        invokeHandler(formerHandler, args, context)
+      } catch (err) {
+        handleError(err, context)
+      }
     }
   }
 

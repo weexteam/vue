@@ -117,7 +117,7 @@ function omitUseless (object) {
     delete object.ref
     for (const key in object) {
       omitUseless(object[key])
-      if (key === '@styleScope') {
+      if (key === '@styleScope' || key === '@componentId' || key === 'bindingKey') {
         delete object[key]
       }
       if (key.charAt(0) !== '@' && (isEmptyObject(object[key]) || object[key] === undefined)) {

@@ -2,7 +2,7 @@
 
 // https://github.com/Hanks10100/weex-native-directive/tree/master/component
 
-import { mergeOptions, isPlainObject, noop } from 'core/util/index'
+import { mergeOptions, isPlainObject, def, noop } from 'core/util/index'
 import Watcher from 'core/observer/watcher'
 import { initProxy } from 'core/instance/proxy'
 import { initState, getData } from 'core/instance/state'
@@ -21,7 +21,7 @@ function initVirtualComponent (options: Object = {}) {
   const componentId = options.componentId
 
   // virtual component uid
-  vm._uid = `virtual-component-${uid++}`
+  vm._uid = componentId || `virtual-component-${uid++}`
 
   // a flag to avoid this being observed
   vm._isVue = true
@@ -63,10 +63,10 @@ function initVirtualComponent (options: Object = {}) {
     ? getData(_data, vm)
     : _data || {}
   if (isPlainObject(data)) {
-    updateComponentData(componentId, data)
+    updateComponentData(String(vm._uid), data)
   }
 
-  registerComponentHook(componentId, 'lifecycle', 'attach', () => {
+  registerComponentHook(String(vm._uid), 'lifecycle', 'attach', () => {
     callHook(vm, 'beforeMount')
 
     const updateComponent = () => {
@@ -77,7 +77,7 @@ function initVirtualComponent (options: Object = {}) {
     // watch all keys in data and send mutation to native
     Object.keys(data).forEach(key => {
       vm.$watch(key, (newValue) => {
-        updateComponentData(componentId, { [key]: newValue })
+        updateComponentData(String(vm._uid), { [key]: newValue })
       }, { deep: true })
     })
 
@@ -148,7 +148,7 @@ export function resolveVirtualComponent (vnode: MountedComponentVNode): VNode {
     methods: {
       registerVirtualComponent () {
         const vm: Component = this
-        vm._virtualComponents = {}
+        def(vm, '_virtualComponents', {})
 
         registerComponentHook(
           String(vm._uid),

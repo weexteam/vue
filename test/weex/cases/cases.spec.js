@@ -73,6 +73,33 @@ describe('Usage', () => {
     it('v-on', createRenderTestCase('recycle-list/v-on'))
     it('v-on-inline', createRenderTestCase('recycle-list/v-on-inline'))
 
+    it('update recycle-list data', done => {
+      const source = readFile(`recycle-list/update.vue`)
+      const before = readObject(`recycle-list/update.vdom.js`)
+      // const after = readObject(`recycle-list/update.vdom.js`)
+      compileVue(source).then(code => {
+        const id = String(Date.now() * Math.random())
+        const instance = createInstance(id, code)
+        setTimeout(() => {
+          expect(getRoot(instance)).toEqual(before)
+          const [event, update] = getEvents(instance)
+          fireEvent(instance, event.ref, event.type, {})
+          setTimeout(() => {
+            fireEvent(instance, update.ref, update.type, {})
+            // fireEvent(instance, event.ref, event.type, {})
+            // expect(getRoot(instance)).toEqual(after)
+            setTimeout(() => {
+              fireEvent(instance, event.ref, event.type, {})
+              // fireEvent(instance, event.ref, event.type, {})
+              // expect(getRoot(instance)).toEqual(after)
+              // instance.$destroy()
+              done()
+            }, 50)
+          }, 50)
+        }, 50)
+      }).catch(done.fail)
+    })
+
     it('stateless component', done => {
       compileWithDeps('recycle-list/components/stateless.vue', [{
         name: 'banner',

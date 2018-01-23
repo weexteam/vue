@@ -108,7 +108,7 @@ function genHandler (
         : handler.value
     /* istanbul ignore if */
     if (__WEEX__ && handler.params) {
-      return genWeexHandlerWithParams(handler.params, code + handlerCode)
+      return genWeexHandlerWithParams(code + handlerCode)
     }
     return `function($event){${code}${handlerCode}}`
   }
