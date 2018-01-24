@@ -163,6 +163,10 @@ export function createInstance (id, code, ...args) {
   context.registerModules({
     timer: ['setTimeout', 'setInterval']
   })
+  context.registerComponents([{
+    type: 'recycle-list',
+    methods: ['updateData', 'setListData']
+  }])
   const instance = context.createInstance(id, `// { "framework": "Vue" }\n${code}`, ...args) || {}
   instance.document = context.getDocument(id)
   instance.$getRoot = () => context.getRoot(id)
@@ -172,7 +176,7 @@ export function createInstance (id, code, ...args) {
     context.destroyInstance(id)
   }
   instance.$triggerHook = (id, hook, args) => {
-    instance.document.taskCenter.triggerHook(id, 'lifecycle', hook, { args })
+    return instance.document.taskCenter.triggerHook(id, 'lifecycle', hook, args)
   }
   return instance
 }

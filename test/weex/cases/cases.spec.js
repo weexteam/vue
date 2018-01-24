@@ -74,25 +74,42 @@ describe('Usage', () => {
     it('v-on-inline', createRenderTestCase('recycle-list/v-on-inline'))
 
     it('update recycle-list data', done => {
+      const tasks = []
+      addTaskHook((_, task) => tasks.push(task))
       const source = readFile(`recycle-list/update.vue`)
       const before = readObject(`recycle-list/update.vdom.js`)
-      // const after = readObject(`recycle-list/update.vdom.js`)
       compileVue(source).then(code => {
         const id = String(Date.now() * Math.random())
         const instance = createInstance(id, code)
         setTimeout(() => {
           expect(getRoot(instance)).toEqual(before)
+          tasks.length = 0
           const [event, update] = getEvents(instance)
           fireEvent(instance, event.ref, event.type, {})
           setTimeout(() => {
+            expect(tasks.length).toEqual(1)
+            expect(tasks[0].method).toEqual('setListData')
+            expect(tasks[0].args[0]).toEqual([
+              { name: 'A' },
+              { name: 'B' },
+              { name: 'Y-1' }
+            ])
+            tasks.length = 0
             fireEvent(instance, update.ref, update.type, {})
-            // fireEvent(instance, event.ref, event.type, {})
-            // expect(getRoot(instance)).toEqual(after)
+            fireEvent(instance, event.ref, event.type, {})
             setTimeout(() => {
-              fireEvent(instance, event.ref, event.type, {})
-              // fireEvent(instance, event.ref, event.type, {})
-              // expect(getRoot(instance)).toEqual(after)
-              // instance.$destroy()
+              expect(tasks.length).toEqual(2)
+              expect(tasks[0].method).toEqual('updateData')
+              expect(tasks[0].args).toEqual([2, { name: 'X-2' }])
+              expect(tasks[1].method).toEqual('setListData')
+              expect(tasks[1].args[0]).toEqual([
+                { name: 'A' },
+                { name: 'B' },
+                { name: 'X-2' },
+                { name: 'Y-3' }
+              ])
+              instance.$destroy()
+              resetTaskHook()
               done()
             }, 50)
           }, 50)
@@ -163,7 +180,6 @@ describe('Usage', () => {
       }]).then(code => {
         const id = String(Date.now() * Math.random())
         const instance = createInstance(id, code)
-        // expect(tasks.length).toEqual(3)
         setTimeout(() => {
           // check the render results
           const target = readObject('recycle-list/components/stateful.vdom.js')
@@ -171,7 +187,7 @@ describe('Usage', () => {
           tasks.length = 0
 
           // trigger component hooks
-          instance.$triggerHook(
+          const res1 = instance.$triggerHook(
             'virtual-component-template-0', // uid of the virtual component template
             'create', // lifecycle hook name
 
@@ -181,14 +197,15 @@ describe('Usage', () => {
               { start: 3 } // propsData of the virtual component
             ]
           )
-          instance.$triggerHook('virtual-component-template-0', 'create', ['x-2', { start: 11 }])
+          const res2 = instance.$triggerHook(
+            'virtual-component-template-0',
+            'create',
+            ['x-2', { start: 11 }]
+          )
 
           // the state (_data) of the virtual component should be sent to native
-          expect(tasks.length).toEqual(2)
-          expect(tasks[0].method).toEqual('updateComponentData')
-          expect(tasks[0].args).toEqual(['x-1', { count: 6 }, ''])
-          expect(tasks[1].method).toEqual('updateComponentData')
-          expect(tasks[1].args).toEqual(['x-2', { count: 22 }, ''])
+          expect(res1).toEqual({ count: 6 })
+          expect(res2).toEqual({ count: 22 })
 
           instance.$triggerHook('x-1', 'attach')
           instance.$triggerHook('x-2', 'attach')
@@ -223,22 +240,29 @@ describe('Usage', () => {
         setTimeout(() => {
           const target = readObject('recycle-list/components/stateful-lifecycle.vdom.js')
           expect(getRoot(instance)).toEqual(target)
-
           instance.$triggerHook('virtual-component-template-0', 'create', ['y-1'])
           instance.$triggerHook('y-1', 'attach')
-          instance.$triggerHook('y-1', 'detach')
-          expect(global.__lifecycles).toEqual([
-            'beforeCreate undefined',
-            'created 0',
-            'beforeMount 1',
-            'mounted 1',
-            'beforeDestroy 2',
-            'destroyed 2'
-          ])
-
-          delete global.__lifecycles
-          instance.$destroy()
-          done()
+          setTimeout(() => {
+            expect(global.__lifecycles).toEqual([
+              'beforeCreate undefined',
+              'created 0',
+              'beforeMount 1',
+              'mounted 1',
+              'beforeUpdate 2'
+              // 'updated 2' // the updated lifecycle can't be simulated in Node.js
+            ])
+            global.__lifecycles = []
+            instance.$triggerHook('y-1', 'detach')
+            setTimeout(() => {
+              expect(global.__lifecycles).toEqual([
+                'beforeDestroy 2',
+                'destroyed 2'
+              ])
+              delete global.__lifecycles
+              instance.$destroy()
+              done()
+            }, 50)
+          }, 50)
         }, 50)
       }).catch(done.fail)
     })

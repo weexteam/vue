@@ -24,6 +24,7 @@
         this.longList.push({ name: `Y-${this.start}` })
       },
       update () {
+        this.start++
         this.longList[this.longList.length-1].name = `X-${this.start}`
       }
     }
