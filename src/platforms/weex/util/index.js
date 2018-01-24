@@ -38,18 +38,3 @@ export function updateComponentData (
   }
   warn(`Failed to update component data (${componentId}).`)
 }
-
-export function updateRecycleListData (
-  el: VNode,
-  data: Array<any> | Object,
-  index?: number
-) {
-  if (!document || !document.taskCenter) {
-    warn(`Can't find available "document" or "taskCenter".`)
-    return
-  }
-  if (typeof document.taskCenter.updateRecycleListData === 'function') {
-    return document.taskCenter.updateRecycleListData(el, data, index)
-  }
-  warn(`Failed to update recycle list data.`)
-}

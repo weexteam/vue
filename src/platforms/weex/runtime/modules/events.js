@@ -59,7 +59,7 @@ function add (
       try {
         invokeHandler(formerHandler, args, context)
       } catch (err) {
-        handleError(err, context)
+        handleError(err, context, `Failed to invoke virtual component handler (${componentId})`)
       }
     }
   }

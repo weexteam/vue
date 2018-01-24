@@ -2,7 +2,7 @@
 
 // https://github.com/Hanks10100/weex-native-directive/tree/master/component
 
-import { mergeOptions, isPlainObject, def, noop } from 'core/util/index'
+import { mergeOptions, def, noop } from 'core/util/index'
 import Watcher from 'core/observer/watcher'
 import { initProxy } from 'core/instance/proxy'
 import { initState, getData } from 'core/instance/state'
@@ -15,6 +15,22 @@ import { registerComponentHook, updateComponentData } from '../../util/index'
 
 let uid = 0
 
+function getComponentState (vm: Component): Object {
+  const _data = vm.$options.data
+  const _computed = vm.$options.computed || {}
+  const data = vm._data
+    ? Object.assign({}, vm._data)
+    : typeof _data === 'function'
+      ? getData(_data, vm)
+      : _data || {}
+  const computed = {}
+  for (const key in _computed) {
+    computed[key] = vm[key]
+  }
+  const state = Object.assign({}, data, computed)
+  return state
+}
+
 // override Vue.prototype._init
 function initVirtualComponent (options: Object = {}) {
   const vm: Component = this
@@ -25,7 +41,7 @@ function initVirtualComponent (options: Object = {}) {
 
   // a flag to avoid this being observed
   vm._isVue = true
-  // vm._isVirtualComponent = true
+
   // merge options
   if (options && options._isComponent) {
     // optimize internal component instantiation
@@ -57,29 +73,14 @@ function initVirtualComponent (options: Object = {}) {
   initProvide(vm) // resolve provide after data/props
   callHook(vm, 'created')
 
-  // send initial data to native
-  const _data = vm.$options.data
-  const data = typeof _data === 'function'
-    ? getData(_data, vm)
-    : _data || {}
-  if (isPlainObject(data)) {
-    updateComponentData(String(vm._uid), data)
-  }
-
   registerComponentHook(String(vm._uid), 'lifecycle', 'attach', () => {
     callHook(vm, 'beforeMount')
 
-    const updateComponent = () => {
-      vm._update(vm._vnode, false)
-    }
-    new Watcher(vm, updateComponent, noop, null, true)
-
-    // watch all keys in data and send mutation to native
-    Object.keys(data).forEach(key => {
-      vm.$watch(key, (newValue) => {
-        updateComponentData(String(vm._uid), { [key]: newValue })
-      }, { deep: true })
-    })
+    new Watcher(
+      vm,
+      () => getComponentState(vm),
+      () => vm._update(vm._vnode, false)
+    )
 
     vm._isMounted = true
     callHook(vm, 'mounted')
@@ -99,8 +100,8 @@ function updateVirtualComponent (vnode?: VNode) {
   }
   vm._vnode = vnode
   if (vm._isMounted && componentId) {
-    // TODO: data should be filtered and without bindings
-    const data = Object.assign({}, vm._data)
+    // TODO: data should be diffed before sending to native
+    const data = getComponentState(vm)
     updateComponentData(componentId, data, () => {
       callHook(vm, 'updated')
     })
@@ -165,12 +166,15 @@ export function resolveVirtualComponent (vnode: MountedComponentVNode): VNode {
             if (vm._virtualComponents) {
               vm._virtualComponents[componentId] = subVm
             }
+
+            // send initial data to native
+            return getComponentState(subVm)
           }
         )
-      },
-      destroyVirtualComponents () {
-        delete this._virtualComponents
       }
+    },
+    destroyed () {
+      delete this._virtualComponents
     }
   })
   vnode.componentOptions.Ctor.prototype._init = initVirtualComponentTemplate
