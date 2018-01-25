@@ -84,30 +84,22 @@ describe('Usage', () => {
         setTimeout(() => {
           expect(getRoot(instance)).toEqual(before)
           tasks.length = 0
-          const [event, update] = getEvents(instance)
-          fireEvent(instance, event.ref, event.type, {})
+          const [add, update] = getEvents(instance)
+          fireEvent(instance, add.ref, add.type, {})
           setTimeout(() => {
             expect(tasks.length).toEqual(1)
-            expect(tasks[0].method).toEqual('setListData')
-            expect(tasks[0].args[0]).toEqual([
-              { name: 'A' },
-              { name: 'B' },
-              { name: 'Y-1' }
-            ])
+            expect(tasks[0].method).toEqual('appendRangeData')
+            expect(tasks[0].args[0]).toEqual([{ name: 'Y-1' }])
             tasks.length = 0
             fireEvent(instance, update.ref, update.type, {})
-            fireEvent(instance, event.ref, event.type, {})
+            fireEvent(instance, add.ref, add.type, {})
             setTimeout(() => {
+              // tasks.forEach(task => console.log(task))
               expect(tasks.length).toEqual(2)
-              expect(tasks[0].method).toEqual('updateData')
-              expect(tasks[0].args).toEqual([2, { name: 'X-2' }])
-              expect(tasks[1].method).toEqual('setListData')
-              expect(tasks[1].args[0]).toEqual([
-                { name: 'A' },
-                { name: 'B' },
-                { name: 'X-2' },
-                { name: 'Y-3' }
-              ])
+              expect(tasks[0].method).toEqual('appendRangeData')
+              expect(tasks[0].args[0]).toEqual([{ name: 'Y-3' }])
+              expect(tasks[1].method).toEqual('updateData')
+              expect(tasks[1].args).toEqual([2, { name: 'X-2' }])
               instance.$destroy()
               resetTaskHook()
               done()
@@ -279,6 +271,44 @@ describe('Usage', () => {
           expect(getRoot(instance)).toEqual(target)
           instance.$destroy()
           done()
+        }, 50)
+      }).catch(done.fail)
+    })
+
+    it('loadmore event', done => {
+      const tasks = []
+      addTaskHook((_, task) => tasks.push(task))
+      const source = readFile(`recycle-list/loadmore.vue`)
+      const target = readObject(`recycle-list/loadmore.vdom.js`)
+      compileVue(source).then(code => {
+        const id = String(Date.now() * Math.random())
+        const instance = createInstance(id, code)
+        const LOADMORE_COUNT = 4
+        setTimeout(() => {
+          expect(getRoot(instance)).toEqual(target)
+          tasks.length = 0
+          const [loadmore] = getEvents(instance)
+          fireEvent(instance, loadmore.ref, loadmore.type, {})
+          setTimeout(() => {
+            expect(tasks.length).toEqual(LOADMORE_COUNT)
+            for (let i = 0; i < LOADMORE_COUNT; ++i) {
+              expect(tasks[i].method).toEqual('appendRangeData')
+              expect(tasks[i].args[0]).toEqual([6 + i])
+            }
+            tasks.length = 0
+            fireEvent(instance, loadmore.ref, loadmore.type, {})
+            fireEvent(instance, loadmore.ref, loadmore.type, {})
+            setTimeout(() => {
+              expect(tasks.length).toEqual(LOADMORE_COUNT * 2)
+              for (let i = 0; i < LOADMORE_COUNT * 2; ++i) {
+                expect(tasks[i].method).toEqual('appendRangeData')
+                expect(tasks[i].args[0]).toEqual([10 + i])
+              }
+              instance.$destroy()
+              resetTaskHook()
+              done()
+            }, 50)
+          }, 50)
         }, 50)
       }).catch(done.fail)
     })
