@@ -161,7 +161,8 @@ export function createInstance (id, code, ...args) {
   WeexRuntime.config.frameworks = { Vue }
   const context = WeexRuntime.init(WeexRuntime.config)
   context.registerModules({
-    timer: ['setTimeout', 'setInterval']
+    timer: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    modal: ['toast', 'alert']
   })
   context.registerComponents([{
     type: 'recycle-list',

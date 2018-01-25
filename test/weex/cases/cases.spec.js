@@ -221,6 +221,58 @@ describe('Usage', () => {
       }).catch(done.fail)
     })
 
+    it('watch & computed', done => {
+      const tasks = []
+      addTaskHook((_, task) => tasks.push(task))
+      compileWithDeps('recycle-list/components/watch-computed.vue', [{
+        name: 'formula',
+        path: 'recycle-list/components/formula.vue'
+      }]).then(code => {
+        const id = String(Date.now() * Math.random())
+        const instance = createInstance(id, code)
+        const target = readObject(`recycle-list/components/watch-computed.vdom.js`)
+        setTimeout(() => {
+          expect(getRoot(instance)).toEqual(target)
+          const [btnX, btnY] = getEvents(instance)
+          const res1 = instance.$triggerHook(
+            'virtual-component-template-0',
+            'create',
+            ['formula-1', { start: 7 }]
+          )
+          const res2 = instance.$triggerHook(
+            'virtual-component-template-0',
+            'create',
+            ['formula-2', { start: 9 }]
+          )
+          expect(res1).toEqual({ x: 7, y: 7, result: 49 })
+          expect(res2).toEqual({ x: 9, y: 9, result: 81 })
+          instance.$triggerHook('formula-1', 'attach')
+          instance.$triggerHook('formula-2', 'attach')
+          tasks.length = 0
+          fireEvent(instance, btnX.ref, btnX.type, { componentId: 'formula-1' })
+          fireEvent(instance, btnY.ref, btnY.type, { componentId: 'formula-2' })
+          setTimeout(() => {
+            expect(tasks.length).toEqual(4)
+            expect(tasks[0].module).toEqual('modal')
+            expect(tasks[0].method).toEqual('toast')
+            expect(tasks[0].args).toEqual([{ message: 'result changed: 56' }])
+            expect(tasks[1].module).toEqual('modal')
+            expect(tasks[1].method).toEqual('toast')
+            expect(tasks[1].args).toEqual([{ message: 'result changed: 90' }])
+            expect(tasks[2].method).toEqual('updateComponentData')
+            expect(tasks[2].args[0]).toEqual('formula-1')
+            expect(tasks[2].args[1]).toEqual({ x: 8, y: 7, result: 56 })
+            expect(tasks[3].method).toEqual('updateComponentData')
+            expect(tasks[3].args[0]).toEqual('formula-2')
+            expect(tasks[3].args[1]).toEqual({ x: 9, y: 10, result: 90 })
+            instance.$destroy()
+            resetTaskHook()
+            done()
+          }, 50)
+        }, 50)
+      }).catch(done.fail)
+    })
+
     it('component lifecycle', done => {
       global.__lifecycles = []
       compileWithDeps('recycle-list/components/stateful-lifecycle.vue', [{
