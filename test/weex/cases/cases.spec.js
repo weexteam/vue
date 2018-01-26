@@ -72,6 +72,7 @@ describe('Usage', () => {
     it('v-for-iterator', createRenderTestCase('recycle-list/v-for-iterator'))
     it('v-on', createRenderTestCase('recycle-list/v-on'))
     it('v-on-inline', createRenderTestCase('recycle-list/v-on-inline'))
+    it('v-once', createRenderTestCase('recycle-list/v-once'))
 
     it('update recycle-list data', done => {
       const tasks = []
