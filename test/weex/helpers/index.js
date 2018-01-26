@@ -167,8 +167,8 @@ export function createInstance (id, code, ...args) {
   context.registerComponents([{
     type: 'recycle-list',
     methods: [
-      'appendData', 'removeData', 'insertData', 'updateData',
-      'appendRangeData', 'insertRangeData', 'setListData'
+      'appendData', 'removeData', 'insertData',
+      'updateData', 'insertRange', 'setListData'
     ]
   }])
   const instance = context.createInstance(id, `// { "framework": "Vue" }\n${code}`, ...args) || {}

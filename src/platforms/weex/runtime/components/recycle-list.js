@@ -26,6 +26,8 @@ function interceptArrayMethods (vm: Component, array: Array<any>) {
   for (let i = 0, n = arrayKeys.length; i < n; i++) {
     const key = arrayKeys[i]
     def(array, key, function recycleListArrayProxy (...args) {
+      const length = this.length
+
       // update the array and notify changes
       const method = arrayMethods[key]
       if (typeof method === 'function') {
@@ -34,11 +36,11 @@ function interceptArrayMethods (vm: Component, array: Array<any>) {
 
       // send mutations to native
       const remove = getComponentMethod(vm, 'removeData')
-      const insert = getComponentMethod(vm, 'insertRangeData')
+      const insert = getComponentMethod(vm, 'insertRange')
       const update = getComponentMethod(vm, 'setListData')
       switch (key) {
-        case 'push': insert(this.length, args); break
-        case 'pop': remove(this.length - 1, 1); break
+        case 'push': insert(length, args); break
+        case 'pop': remove(length - 1, 1); break
         case 'shift': remove(0, 1); break
         case 'unshift': insert(0, args); break
         case 'splice': {
