@@ -88,16 +88,16 @@ describe('Usage', () => {
           fireEvent(instance, add.ref, add.type, {})
           setTimeout(() => {
             expect(tasks.length).toEqual(1)
-            expect(tasks[0].method).toEqual('appendRangeData')
-            expect(tasks[0].args[0]).toEqual([{ name: 'Y-1' }])
+            expect(tasks[0].method).toEqual('insertRangeData')
+            expect(tasks[0].args).toEqual([3, [{ name: 'Y-1' }]])
             tasks.length = 0
             fireEvent(instance, update.ref, update.type, {})
             fireEvent(instance, add.ref, add.type, {})
             setTimeout(() => {
               // tasks.forEach(task => console.log(task))
               expect(tasks.length).toEqual(2)
-              expect(tasks[0].method).toEqual('appendRangeData')
-              expect(tasks[0].args[0]).toEqual([{ name: 'Y-3' }])
+              expect(tasks[0].method).toEqual('insertRangeData')
+              expect(tasks[0].args).toEqual([4, [{ name: 'Y-3' }]])
               expect(tasks[1].method).toEqual('updateData')
               expect(tasks[1].args).toEqual([2, { name: 'X-2' }])
               instance.$destroy()
@@ -344,8 +344,8 @@ describe('Usage', () => {
           setTimeout(() => {
             expect(tasks.length).toEqual(LOADMORE_COUNT)
             for (let i = 0; i < LOADMORE_COUNT; ++i) {
-              expect(tasks[i].method).toEqual('appendRangeData')
-              expect(tasks[i].args[0]).toEqual([6 + i])
+              expect(tasks[i].method).toEqual('insertRangeData')
+              expect(tasks[i].args).toEqual([6 + i, [6 + i]])
             }
             tasks.length = 0
             fireEvent(instance, loadmore.ref, loadmore.type, {})
@@ -353,8 +353,8 @@ describe('Usage', () => {
             setTimeout(() => {
               expect(tasks.length).toEqual(LOADMORE_COUNT * 2)
               for (let i = 0; i < LOADMORE_COUNT * 2; ++i) {
-                expect(tasks[i].method).toEqual('appendRangeData')
-                expect(tasks[i].args[0]).toEqual([10 + i])
+                expect(tasks[i].method).toEqual('insertRangeData')
+                expect(tasks[i].args).toEqual([10 + i, [10 + i]])
               }
               instance.$destroy()
               resetTaskHook()
