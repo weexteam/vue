@@ -311,6 +311,58 @@ describe('Usage', () => {
       }).catch(done.fail)
     })
 
+    it('emit custom event', done => {
+      const tasks = []
+      addTaskHook((_, task) => tasks.push(task))
+      compileWithDeps('recycle-list/components/custom-event.vue', [{
+        name: 'lifecycle-emit',
+        path: 'recycle-list/components/lifecycle-emit.vue'
+      }]).then(code => {
+        const id = String(Date.now() * Math.random())
+        const instance = createInstance(id, code)
+        const target = readObject(`recycle-list/components/custom-event.vdom.js`)
+        setTimeout(() => {
+          expect(getRoot(instance)).toEqual(target)
+          tasks.length = 0
+          const [click] = getEvents(instance)
+          instance.$triggerHook('virtual-component-template-0', 'create', ['event-1'])
+          instance.$triggerHook('virtual-component-template-0', 'create', ['event-2'])
+          instance.$triggerHook('event-1', 'attach')
+          instance.$triggerHook('event-2', 'attach')
+          expect(tasks.length).toEqual(8)
+          expect(tasks[0].module).toEqual('modal')
+          expect(tasks[0].method).toEqual('toast')
+          expect(tasks[0].args[0]).toEqual({ message: 'event-1#beforeCreate undefined' })
+          expect(tasks[1].args[0]).toEqual({ message: 'event-1#created 0' })
+          expect(tasks[2].args[0]).toEqual({ message: 'event-2#beforeCreate undefined' })
+          expect(tasks[3].args[0]).toEqual({ message: 'event-2#created 0' })
+          expect(tasks[4].args[0]).toEqual({ message: 'event-1#beforeMount 1' })
+          expect(tasks[5].args[0]).toEqual({ message: 'event-1#mounted 2' })
+          expect(tasks[6].args[0]).toEqual({ message: 'event-2#beforeMount 1' })
+          expect(tasks[7].args[0]).toEqual({ message: 'event-2#mounted 2' })
+          tasks.length = 0
+          fireEvent(instance, click.ref, click.type, {}, [1])
+          setTimeout(() => {
+            // expect(tasks.length).toEqual(1)
+            expect(tasks[0].method).toEqual('updateData')
+            expect(tasks[0].args).toEqual([1, { visible: false }])
+            tasks.length = 0
+            instance.$triggerHook('event-2', 'detach')
+            setTimeout(() => {
+              expect(tasks.length).toEqual(2)
+              expect(tasks[0].module).toEqual('modal')
+              expect(tasks[0].method).toEqual('toast')
+              expect(tasks[0].args[0]).toEqual({ message: 'event-2#beforeDestroy 3' })
+              expect(tasks[1].args[0]).toEqual({ message: 'event-2#destroyed 3' })
+              instance.$destroy()
+              resetTaskHook()
+              done()
+            }, 50)
+          }, 50)
+        }, 50)
+      }).catch(done.fail)
+    })
+
     it('stateful component with v-model', done => {
       compileWithDeps('recycle-list/components/stateful-v-model.vue', [{
         name: 'editor',

@@ -57,6 +57,7 @@ function add (
         context = vcs[componentId] || context
       }
       try {
+        // console.log(' -> invoke virtual handler', args)
         invokeHandler(formerHandler, args, context)
       } catch (err) {
         handleError(err, context, `Failed to invoke virtual component handler (${componentId})`)

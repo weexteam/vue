@@ -150,10 +150,11 @@ export function getEvents (instance) {
   return events
 }
 
-export function fireEvent (instance, ref, type, event = {}) {
+export function fireEvent (instance, ref, type, event = {}, params) {
   const el = instance.document.getRef(ref)
   if (el) {
-    instance.document.fireEvent(el, type, event)
+    const _type = typeof type === 'string' ? type : type.type || ''
+    instance.document.fireEvent(el, _type, event, {}, { params })
   }
 }
 

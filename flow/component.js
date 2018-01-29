@@ -69,6 +69,9 @@ declare interface Component {
   _staticTrees: ?Array<VNode>; // v-once cached trees
   _hasHookEvent: boolean;
   _provided: ?Object;
+
+  // only be used in virtual component
+  _vmTemplate?: Component,
   _virtualComponents?: { [key: string]: Component };
 
   // private methods

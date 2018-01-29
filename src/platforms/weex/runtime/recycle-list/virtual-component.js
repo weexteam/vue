@@ -35,6 +35,7 @@ function getComponentState (vm: Component): Object {
 function initVirtualComponent (options: Object = {}) {
   const vm: Component = this
   const componentId = options.componentId
+  def(vm, '_vmTemplate', options.vmTemplate)
 
   // virtual component uid
   vm._uid = componentId || `virtual-component-${uid++}`
@@ -92,6 +93,11 @@ function initVirtualComponent (options: Object = {}) {
 
   registerComponentHook(componentId, 'lifecycle', 'detach', () => {
     vm.$destroy()
+    if (vm._vmTemplate) {
+      // $flow-disable-line
+      vm._vmTemplate.removeVirtualComponent(vm._uid)
+      delete vm._vmTemplate
+    }
   })
 }
 
@@ -146,8 +152,18 @@ function initVirtualComponentTemplate (options: Object = {}) {
 export function resolveVirtualComponent (vnode: MountedComponentVNode): VNode {
   const BaseCtor = vnode.componentOptions.Ctor
   const VirtualComponent = BaseCtor.extend({})
+  const originalEmit = VirtualComponent.prototype.$emit
   VirtualComponent.prototype._init = initVirtualComponent
   VirtualComponent.prototype._update = updateVirtualComponent
+  VirtualComponent.prototype.$emit = function $emit (...args) {
+    const componentId = this._uid
+    const vmTemplate = this._vmTemplate
+    if (componentId && vmTemplate) {
+      args.push(componentId)
+      originalEmit.apply(vmTemplate, args)
+    }
+    return originalEmit.apply(this, args)
+  }
 
   vnode.componentOptions.Ctor = BaseCtor.extend({
     methods: {
@@ -163,6 +179,7 @@ export function resolveVirtualComponent (vnode: MountedComponentVNode): VNode {
           // create virtual component
           (componentId, propsData) => {
             const subVm = new VirtualComponent({
+              vmTemplate: vm,
               componentId,
               propsData
             })
@@ -175,6 +192,9 @@ export function resolveVirtualComponent (vnode: MountedComponentVNode): VNode {
             return getComponentState(subVm)
           }
         )
+      },
+      removeVirtualComponent (componentId) {
+        delete this._virtualComponents[componentId]
       }
     },
     destroyed () {
