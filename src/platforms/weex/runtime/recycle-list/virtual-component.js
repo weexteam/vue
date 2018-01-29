@@ -73,7 +73,7 @@ function initVirtualComponent (options: Object = {}) {
   initProvide(vm) // resolve provide after data/props
   callHook(vm, 'created')
 
-  registerComponentHook(String(vm._uid), 'lifecycle', 'attach', () => {
+  registerComponentHook(componentId, 'lifecycle', 'attach', () => {
     callHook(vm, 'beforeMount')
 
     new Watcher(
@@ -84,6 +84,10 @@ function initVirtualComponent (options: Object = {}) {
 
     vm._isMounted = true
     callHook(vm, 'mounted')
+  })
+
+  registerComponentHook(componentId, 'lifecycle', 'update', () => {
+    vm._update(vm._vnode, false)
   })
 
   registerComponentHook(componentId, 'lifecycle', 'detach', () => {
@@ -180,4 +184,3 @@ export function resolveVirtualComponent (vnode: MountedComponentVNode): VNode {
   vnode.componentOptions.Ctor.prototype._init = initVirtualComponentTemplate
   vnode.componentOptions.Ctor.prototype._update = noop
 }
-
