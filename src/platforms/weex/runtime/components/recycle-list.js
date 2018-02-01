@@ -93,18 +93,18 @@ export default {
     }
 
     const parent = this.$options.parent
-    const bindingKey = this.$attrs.bindingKey
-    if (parent && bindingKey) {
+    const exp = this.$attrs.bindingExpression
+    if (parent && exp) {
       // prevent the re-render which caused by the binding list data
       parent.$watch(
-        bindingKey,
+        exp,
         () => def(this.$options, '[[UseCache]]', true),
         { deep: true, immediate: true }
       )
 
       // watch the list data and send operations to native
       watchArray(this, this.$attrs.listData)
-      parent.$watch(bindingKey, newList => {
+      parent.$watch(exp, newList => {
         watchArray(this, newList)
       })
     }
