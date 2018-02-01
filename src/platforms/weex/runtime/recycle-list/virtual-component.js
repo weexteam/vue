@@ -2,7 +2,7 @@
 
 // https://github.com/Hanks10100/weex-native-directive/tree/master/component
 
-import { mergeOptions, def, noop } from 'core/util/index'
+import { mergeOptions, def, noop, isPlainObject } from 'core/util/index'
 import Watcher from 'core/observer/watcher'
 import { initProxy } from 'core/instance/proxy'
 import { initState, getData } from 'core/instance/state'
@@ -90,6 +90,20 @@ function initVirtualComponent (options: Object = {}) {
   registerComponentHook(componentId, 'lifecycle', 'update', () => {
     vm._update(vm._vnode, false)
   })
+
+  registerComponentHook(
+    componentId,
+    'lifecycle',
+    'syncState',
+    (id, propsData) => {
+      if (isPlainObject(propsData)) {
+        for (const key in propsData) {
+          vm[key] = propsData[key]
+        }
+      }
+      return getComponentState(vm)
+    }
+  )
 
   registerComponentHook(componentId, 'lifecycle', 'detach', () => {
     vm.$destroy()
