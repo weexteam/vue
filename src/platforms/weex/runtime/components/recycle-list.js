@@ -45,8 +45,8 @@ function interceptArrayMethods (vm: Component, array: Array<any>) {
         case 'unshift': insert(0, args); break
         case 'splice': {
           const [start, count, ...items] = args
-          remove(start, count)
-          insert(start, items)
+          count > 0 && remove(start, count)
+          items.length > 0 && insert(start, items)
         } break
         case 'sort': update(this.slice()); break
         case 'reverse': update(this.slice()); break
