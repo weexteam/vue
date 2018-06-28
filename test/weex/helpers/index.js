@@ -112,11 +112,13 @@ function isEmptyObject (object) {
   return isObject(object) && Object.keys(object).length < 1
 }
 
-function omitUseless (object) {
+function omitUseless (object, parentKey) {
   if (isObject(object)) {
-    delete object.ref
+    if (parentKey !== 'attr') {
+      delete object.ref
+    }
     for (const key in object) {
-      omitUseless(object[key])
+      omitUseless(object[key], key)
       if (key === '@styleScope' ||
         key === '@templateId' ||
         key === 'bindingExpression') {

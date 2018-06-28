@@ -3,6 +3,7 @@
 import { preTransformRecycleList } from './recycle-list'
 import { postTransformComponent } from './component'
 import { postTransformComponentRoot } from './component-root'
+import { postTransformRef } from './ref'
 import { postTransformText } from './text'
 import { preTransformVBind } from './v-bind'
 import { preTransformVIf } from './v-if'
@@ -47,6 +48,7 @@ function postTransformNode (el: ASTElement, options: WeexCompilerOptions) {
       postTransformText(el, options)
     }
     postTransformVOn(el, options)
+    postTransformRef(el, options)
   }
   if (el === currentRecycleList) {
     currentRecycleList = null
