@@ -1889,170 +1889,168 @@ function isDirectChildOfTemplateFor (node) {
 
 /*  */
 
-var fnExpRE = /^([\w$_]+|\([^)]*?\))\s*=>|^function\s*\(/;
-var simplePathRE = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\['[^']*?']|\["[^"]*?"]|\[\d+]|\[[A-Za-z_$][\w$]*])*$/;
+// import { warn } from 'core/util/index'
 
-// KeyboardEvent.keyCode aliases
-var keyCodes = {
-  esc: 27,
-  tab: 9,
-  enter: 13,
-  space: 32,
-  up: 38,
-  left: 37,
-  right: 39,
-  down: 40,
-  'delete': [8, 46]
-};
+// this will be preserved during build
+// $flow-disable-line
+var acorn = require('acorn'); // $flow-disable-line
+var walk = require('acorn/dist/walk'); // $flow-disable-line
+var escodegen = require('escodegen');
 
-// KeyboardEvent.key aliases
-var keyNames = {
-  esc: 'Escape',
-  tab: 'Tab',
-  enter: 'Enter',
-  space: ' ',
-  // #7806: IE11 uses key names without `Arrow` prefix for arrow keys.
-  up: ['Up', 'ArrowUp'],
-  left: ['Left', 'ArrowLeft'],
-  right: ['Right', 'ArrowRight'],
-  down: ['Down', 'ArrowDown'],
-  'delete': ['Backspace', 'Delete']
-};
+var functionCallRE = /^\s*([A-Za-z_$0-9\['\."\]]+)*\s*\(\s*(([A-Za-z_$0-9\['\."\]]+)?(\s*,\s*([A-Za-z_$0-9\['\."\]]+))*)\s*\)$/;
 
-// #4868: modifiers that prevent the execution of the listener
-// need to explicitly return null so that we can determine whether to remove
-// the listener for .once
-var genGuard = function (condition) { return ("if(" + condition + ")return null;"); };
+function nodeToBinding (node) {
+  switch (node.type) {
+    case 'Literal': return node.value
+    case 'Identifier':
+    case 'UnaryExpression':
+    case 'BinaryExpression':
+    case 'LogicalExpression':
+    case 'ConditionalExpression':
+    case 'MemberExpression': return { '@binding': escodegen.generate(node) }
+    case 'ArrayExpression': return node.elements.map(function (_) { return nodeToBinding(_); })
+    case 'ObjectExpression': {
+      var object = {};
+      node.properties.forEach(function (prop) {
+        if (!prop.key || prop.key.type !== 'Identifier') {
+          return
+        }
+        var key = escodegen.generate(prop.key);
+        var value = nodeToBinding(prop.value);
+        if (key && value) {
+          object[key] = value;
+        }
+      });
+      return object
+    }
+    default: {
+      // warn(`Not support ${node.type}: "${escodegen.generate(node)}"`)
+      return ''
+    }
+  }
+}
 
-var modifierCode = {
-  stop: '$event.stopPropagation();',
-  prevent: '$event.preventDefault();',
-  self: genGuard("$event.target !== $event.currentTarget"),
-  ctrl: genGuard("!$event.ctrlKey"),
-  shift: genGuard("!$event.shiftKey"),
-  alt: genGuard("!$event.altKey"),
-  meta: genGuard("!$event.metaKey"),
-  left: genGuard("'button' in $event && $event.button !== 0"),
-  middle: genGuard("'button' in $event && $event.button !== 1"),
-  right: genGuard("'button' in $event && $event.button !== 2")
-};
+function generateBinding (exp) {
+  if (exp && typeof exp === 'string') {
+    var ast = null;
+    try {
+      ast = acorn.parse(("(" + exp + ")"));
+    } catch (e) {
+      // warn(`Failed to parse the expression: "${exp}"`)
+      return ''
+    }
+
+    var output = '';
+    walk.simple(ast, {
+      Expression: function Expression (node) {
+        output = nodeToBinding(node);
+      }
+    });
+    return output
+  }
+}
+
+/*  */
+
+// this will be preserved during build
+// $flow-disable-line
+var transpile = require('vue-template-es2015-compiler');
+
+// Generate handler code with binding params for Weex platform
+/* istanbul ignore next */
+function genWeexHandlerWithParams (handlerCode) {
+  var match = functionCallRE.exec(handlerCode);
+  if (!match) {
+    return ''
+  }
+  var handlerExp = match[1];
+  var params = match[2].split(/\s*,\s*/);
+  var exps = params.filter(function (exp) { return simplePathRE.test(exp) && exp !== '$event'; });
+  var bindings = exps.map(function (exp) { return generateBinding(exp); });
+  var args = exps.map(function (exp, index) {
+    var key = "$$_" + (index + 1);
+    for (var i = 0; i < params.length; ++i) {
+      if (params[i] === exp) {
+        params[i] = key;
+      }
+    }
+    return key
+  });
+  args.push('$event');
+  return ("{\n    handler: function (" + (args.join(',')) + ") {\n      " + handlerExp + "(" + (params.join(',')) + ");\n    },\n    params:" + (JSON.stringify(bindings)) + "\n  }")
+}
+
+function genWeexHandler (handler, options) {
+  var code = handler.value;
+  var isMethodPath = simplePathRE.test(code);
+  var isFunctionExpression = fnExpRE.test(code);
+  var isFunctionCall = functionCallRE.test(code);
+
+  // TODO: binding this to recyclable event handlers
+  if (options.recyclable) {
+    if (isMethodPath) {
+      return ("function($event){this." + code + "()}")
+    }
+    if (isFunctionExpression && options.warn) {
+      options.warn(("Function expression is not supported in recyclable components: " + code + "."));
+    }
+    if (isFunctionCall) {
+      return ("function($event){this." + code + "}")
+    }
+    // inline statement
+    code = transpile(("with(this){" + code + "}"), {
+      transforms: { stripWith: true }
+    });
+  }
+
+  if (isMethodPath || isFunctionExpression) {
+    return code
+  }
+  /* istanbul ignore if */
+  if (handler.params) {
+    return genWeexHandlerWithParams(handler.value)
+  }
+  // inline statement
+  return ("function($event){" + code + "}")
+}
+
+/*  */
+
+var fnExpRE = /^\s*([\w$_]+|\([^)]*?\))\s*=>|^function\s*\(/;
+var simplePathRE = /^\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\['.*?']|\[".*?"]|\[\d+]|\[[A-Za-z_$][\w$]*])*\s*$/;
 
 function genHandlers (
   events,
   isNative,
-  warn
+  options
 ) {
   var res = isNative ? 'nativeOn:{' : 'on:{';
   for (var name in events) {
-    res += "\"" + name + "\":" + (genHandler(name, events[name])) + ",";
+    res += "\"" + name + "\":" + (genHandler(name, events[name], options)) + ",";
   }
   return res.slice(0, -1) + '}'
 }
 
-// Generate handler code with binding params on Weex
-/* istanbul ignore next */
-function genWeexHandler (params, handlerCode) {
-  var innerHandlerCode = handlerCode;
-  var exps = params.filter(function (exp) { return simplePathRE.test(exp) && exp !== '$event'; });
-  var bindings = exps.map(function (exp) { return ({ '@binding': exp }); });
-  var args = exps.map(function (exp, i) {
-    var key = "$_" + (i + 1);
-    innerHandlerCode = innerHandlerCode.replace(exp, key);
-    return key
-  });
-  args.push('$event');
-  return '{\n' +
-    "handler:function(" + (args.join(',')) + "){" + innerHandlerCode + "},\n" +
-    "params:" + (JSON.stringify(bindings)) + "\n" +
-    '}'
-}
-
 function genHandler (
   name,
-  handler
+  handler,
+  options
 ) {
   if (!handler) {
     return 'function(){}'
   }
 
   if (Array.isArray(handler)) {
-    return ("[" + (handler.map(function (handler) { return genHandler(name, handler); }).join(',')) + "]")
+    return ("[" + (handler.map(function (handler) { return genHandler(name, handler, options); }).join(',')) + "]")
   }
 
   var isMethodPath = simplePathRE.test(handler.value);
   var isFunctionExpression = fnExpRE.test(handler.value);
 
-  if (!handler.modifiers) {
-    if (isMethodPath || isFunctionExpression) {
-      return handler.value
-    }
-    /* istanbul ignore if */
-    if (true && handler.params) {
-      return genWeexHandler(handler.params, handler.value)
-    }
-    return ("function($event){" + (handler.value) + "}") // inline statement
-  } else {
-    var code = '';
-    var genModifierCode = '';
-    var keys = [];
-    for (var key in handler.modifiers) {
-      if (modifierCode[key]) {
-        genModifierCode += modifierCode[key];
-        // left/right
-        if (keyCodes[key]) {
-          keys.push(key);
-        }
-      } else if (key === 'exact') {
-        var modifiers = (handler.modifiers);
-        genModifierCode += genGuard(
-          ['ctrl', 'shift', 'alt', 'meta']
-            .filter(function (keyModifier) { return !modifiers[keyModifier]; })
-            .map(function (keyModifier) { return ("$event." + keyModifier + "Key"); })
-            .join('||')
-        );
-      } else {
-        keys.push(key);
-      }
-    }
-    if (keys.length) {
-      code += genKeyFilter(keys);
-    }
-    // Make sure modifiers like prevent and stop get executed after key filtering
-    if (genModifierCode) {
-      code += genModifierCode;
-    }
-    var handlerCode = isMethodPath
-      ? ("return " + (handler.value) + "($event)")
-      : isFunctionExpression
-        ? ("return (" + (handler.value) + ")($event)")
-        : handler.value;
-    /* istanbul ignore if */
-    if (true && handler.params) {
-      return genWeexHandler(handler.params, code + handlerCode)
-    }
-    return ("function($event){" + code + handlerCode + "}")
+  // Weex does not support modifiers
+  {
+    return genWeexHandler(handler, options)
   }
-}
-
-function genKeyFilter (keys) {
-  return ("if(!('button' in $event)&&" + (keys.map(genFilterCode).join('&&')) + ")return null;")
-}
-
-function genFilterCode (key) {
-  var keyVal = parseInt(key, 10);
-  if (keyVal) {
-    return ("$event.keyCode!==" + keyVal)
-  }
-  var keyCode = keyCodes[key];
-  var keyName = keyNames[key];
-  return (
-    "_k($event.keyCode," +
-    (JSON.stringify(key)) + "," +
-    (JSON.stringify(keyCode)) + "," +
-    "$event.key," +
-    "" + (JSON.stringify(keyName)) +
-    ")"
-  )
 }
 
 /*  */
@@ -2182,7 +2180,7 @@ var config = ({
    * Exposed for legacy reasons
    */
   _lifecycleHooks: LIFECYCLE_HOOKS
-})
+});
 
 /*  */
 
@@ -2970,7 +2968,7 @@ var baseDirectives = {
   on: on,
   bind: bind$1,
   cloak: noop
-}
+};
 
 /*  */
 
@@ -3176,10 +3174,10 @@ function genData (el, state) {
   }
   // event handlers
   if (el.events) {
-    data += (genHandlers(el.events, false, state.warn)) + ",";
+    data += (genHandlers(el.events, false, state.options)) + ",";
   }
   if (el.nativeEvents) {
-    data += (genHandlers(el.nativeEvents, true, state.warn)) + ",";
+    data += (genHandlers(el.nativeEvents, true, state.options)) + ",";
   }
   // slot target
   // only for non-scoped slots
@@ -3764,7 +3762,7 @@ var klass = {
   staticKeys: ['staticClass'],
   transformNode: transformNode,
   genData: genData$1
-}
+};
 
 /*  */
 
@@ -3840,7 +3838,7 @@ var style = {
   staticKeys: ['staticStyle'],
   transformNode: transformNode$1,
   genData: genData$2
-}
+};
 
 /*  */
 
@@ -3871,7 +3869,7 @@ function transformNode$2 (el, options) {
 }
 var props = {
   transformNode: transformNode$2
-}
+};
 
 /*  */
 
@@ -3897,7 +3895,7 @@ var append = {
   staticKeys: ['appendAsTree'],
   preTransformNode: preTransformNode,
   genData: genData$3
-}
+};
 
 /*  */
 
@@ -3989,6 +3987,14 @@ function postTransformComponentRoot (
 
 /*  */
 
+function postTransformRef (el, options) {
+  if (el.ref) {
+    addAttr(el, 'ref', el.ref);
+  }
+}
+
+/*  */
+
 function genText$1 (node) {
   var value = node.type === 3
     ? node.text
@@ -4006,67 +4012,6 @@ function postTransformText (el, options) {
   if (el.children.length) {
     addAttr(el, 'value', genText$1(el.children[0]));
     el.children = [];
-  }
-}
-
-/*  */
-
-// import { warn } from 'core/util/index'
-
-// this will be preserved during build
-// $flow-disable-line
-var acorn = require('acorn'); // $flow-disable-line
-var walk = require('acorn/dist/walk'); // $flow-disable-line
-var escodegen = require('escodegen');
-
-function nodeToBinding (node) {
-  switch (node.type) {
-    case 'Literal': return node.value
-    case 'Identifier':
-    case 'UnaryExpression':
-    case 'BinaryExpression':
-    case 'LogicalExpression':
-    case 'ConditionalExpression':
-    case 'MemberExpression': return { '@binding': escodegen.generate(node) }
-    case 'ArrayExpression': return node.elements.map(function (_) { return nodeToBinding(_); })
-    case 'ObjectExpression': {
-      var object = {};
-      node.properties.forEach(function (prop) {
-        if (!prop.key || prop.key.type !== 'Identifier') {
-          return
-        }
-        var key = escodegen.generate(prop.key);
-        var value = nodeToBinding(prop.value);
-        if (key && value) {
-          object[key] = value;
-        }
-      });
-      return object
-    }
-    default: {
-      // warn(`Not support ${node.type}: "${escodegen.generate(node)}"`)
-      return ''
-    }
-  }
-}
-
-function generateBinding (exp) {
-  if (exp && typeof exp === 'string') {
-    var ast = null;
-    try {
-      ast = acorn.parse(("(" + exp + ")"));
-    } catch (e) {
-      // warn(`Failed to parse the expression: "${exp}"`)
-      return ''
-    }
-
-    var output = '';
-    walk.simple(ast, {
-      Expression: function Expression (node) {
-        output = nodeToBinding(node);
-      }
-    });
-    return output
   }
 }
 
@@ -4181,10 +4126,8 @@ function preTransformVFor (el, options) {
 
 /*  */
 
-var inlineStatementRE = /^\s*([A-Za-z_$0-9\['\."\]]+)*\s*\(\s*(([A-Za-z_$0-9\['\."\]]+)?(\s*,\s*([A-Za-z_$0-9\['\."\]]+))*)\s*\)$/;
-
 function parseHandlerParams (handler) {
-  var res = inlineStatementRE.exec(handler.value);
+  var res = functionCallRE.exec(handler.value);
   if (res && res[2]) {
     handler.params = res[2].split(/\s*,\s*/);
   }
@@ -4262,6 +4205,7 @@ function postTransformNode (el, options) {
       postTransformText(el, options);
     }
     postTransformVOn(el, options);
+    postTransformRef(el, options);
   }
   if (el === currentRecycleList) {
     currentRecycleList = null;
@@ -4272,7 +4216,7 @@ var recycleList = {
   preTransformNode: preTransformNode$1,
   transformNode: transformNode$3,
   postTransformNode: postTransformNode
-}
+};
 
 var modules = [
   recycleList,
@@ -4280,7 +4224,7 @@ var modules = [
   style,
   props,
   append
-]
+];
 
 /*  */
 
@@ -4319,7 +4263,7 @@ function genDefaultModel (
 
 var directives = {
   model: model
-}
+};
 
 /*  */
 

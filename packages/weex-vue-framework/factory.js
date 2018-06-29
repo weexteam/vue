@@ -433,7 +433,7 @@ var config = ({
    * Exposed for legacy reasons
    */
   _lifecycleHooks: LIFECYCLE_HOOKS
-})
+});
 
 /*  */
 
@@ -660,14 +660,14 @@ if (process.env.NODE_ENV !== 'production') {
 /*  */
 
 
-var uid = 0;
+var uid$1 = 0;
 
 /**
  * A dep is an observable that can have multiple
  * directives subscribing to it.
  */
 var Dep = function Dep () {
-  this.id = uid++;
+  this.id = uid$1++;
   this.subs = [];
 };
 
@@ -3064,7 +3064,7 @@ function queueWatcher (watcher) {
 
 /*  */
 
-var uid$1 = 0;
+var uid$2 = 0;
 
 /**
  * A watcher parses an expression, collects dependencies,
@@ -3093,7 +3093,7 @@ var Watcher = function Watcher (
     this.deep = this.user = this.lazy = this.sync = false;
   }
   this.cb = cb;
-  this.id = ++uid$1; // uid for batching
+  this.id = ++uid$2; // uid for batching
   this.active = true;
   this.dirty = this.lazy; // for lazy watchers
   this.deps = [];
@@ -4125,7 +4125,23 @@ function updateComponentData (
 
 // https://github.com/Hanks10100/weex-native-directive/tree/master/component
 
-var uid$2 = 0;
+var uid$3 = 0;
+
+function getComponentState (vm) {
+  var _data = vm.$options.data;
+  var _computed = vm.$options.computed || {};
+  var data = vm._data
+    ? Object.assign({}, vm._data)
+    : typeof _data === 'function'
+      ? getData(_data, vm)
+      : _data || {};
+  var computed = {};
+  for (var key in _computed) {
+    computed[key] = vm[key];
+  }
+  var state = Object.assign({}, data, computed);
+  return state
+}
 
 // override Vue.prototype._init
 function initVirtualComponent (options) {
@@ -4133,12 +4149,14 @@ function initVirtualComponent (options) {
 
   var vm = this;
   var componentId = options.componentId;
+  def(vm, '_vmTemplate', options.vmTemplate);
 
   // virtual component uid
-  vm._uid = "virtual-component-" + (uid$2++);
+  vm._uid = componentId || ("virtual-component-" + (uid$3++));
 
   // a flag to avoid this being observed
   vm._isVue = true;
+
   // merge options
   if (options && options._isComponent) {
     // optimize internal component instantiation
@@ -4170,29 +4188,44 @@ function initVirtualComponent (options) {
   initProvide(vm); // resolve provide after data/props
   callHook(vm, 'created');
 
-  // send initial data to native
-  var data = vm.$options.data;
-  var params = typeof data === 'function'
-    ? getData(data, vm)
-    : data || {};
-  if (isPlainObject(params)) {
-    updateComponentData(componentId, params);
-  }
-
   registerComponentHook(componentId, 'lifecycle', 'attach', function () {
     callHook(vm, 'beforeMount');
 
-    var updateComponent = function () {
-      vm._update(vm._vnode, false);
-    };
-    new Watcher(vm, updateComponent, noop, null, true);
+    new Watcher(
+      vm,
+      function () { return getComponentState(vm); },
+      function () { return vm._update(vm._vnode, false); }
+    );
 
     vm._isMounted = true;
     callHook(vm, 'mounted');
   });
 
+  registerComponentHook(componentId, 'lifecycle', 'update', function () {
+    vm._update(vm._vnode, false);
+  });
+
+  registerComponentHook(
+    componentId,
+    'lifecycle',
+    'syncState',
+    function (id, propsData) {
+      if (isPlainObject(propsData)) {
+        for (var key in propsData) {
+          vm[key] = propsData[key];
+        }
+      }
+      return getComponentState(vm)
+    }
+  );
+
   registerComponentHook(componentId, 'lifecycle', 'detach', function () {
     vm.$destroy();
+    if (vm._vmTemplate) {
+      // $flow-disable-line
+      vm._vmTemplate.removeVirtualComponent(vm._uid);
+      delete vm._vmTemplate;
+    }
   });
 }
 
@@ -4205,47 +4238,104 @@ function updateVirtualComponent (vnode) {
   }
   vm._vnode = vnode;
   if (vm._isMounted && componentId) {
-    // TODO: data should be filtered and without bindings
-    var data = Object.assign({}, vm._data);
+    // TODO: data should be diffed before sending to native
+    var data = getComponentState(vm);
     updateComponentData(componentId, data, function () {
       callHook(vm, 'updated');
     });
   }
 }
 
+function initVirtualComponentTemplate (options) {
+  if ( options === void 0 ) options = {};
+
+  var vm = this;
+
+  // virtual component template uid
+  vm._uid = "virtual-component-template-" + (uid$3++);
+
+  // a flag to avoid this being observed
+  vm._isVue = true;
+  // merge options
+  if (options && options._isComponent) {
+    // optimize internal component instantiation
+    // since dynamic options merging is pretty slow, and none of the
+    // internal component options needs special treatment.
+    initInternalComponent(vm, options);
+  } else {
+    vm.$options = mergeOptions(
+      resolveConstructorOptions(vm.constructor),
+      options || {},
+      vm
+    );
+  }
+
+  vm._self = vm;
+  initEvents(vm);
+  initRender(vm);
+  initState(vm);
+
+  this.registerVirtualComponent();
+}
+
 // listening on native callback
 function resolveVirtualComponent (vnode) {
   var BaseCtor = vnode.componentOptions.Ctor;
   var VirtualComponent = BaseCtor.extend({});
-  var cid = VirtualComponent.cid;
+  var originalEmit = VirtualComponent.prototype.$emit;
   VirtualComponent.prototype._init = initVirtualComponent;
   VirtualComponent.prototype._update = updateVirtualComponent;
+  VirtualComponent.prototype.$emit = function $emit () {
+    var args = [], len = arguments.length;
+    while ( len-- ) args[ len ] = arguments[ len ];
+
+    var componentId = this._uid;
+    var vmTemplate = this._vmTemplate;
+    if (componentId && vmTemplate) {
+      args.push(componentId);
+      originalEmit.apply(vmTemplate, args);
+    }
+    return originalEmit.apply(this, args)
+  };
 
   vnode.componentOptions.Ctor = BaseCtor.extend({
-    beforeCreate: function beforeCreate () {
-      // const vm: Component = this
+    methods: {
+      registerVirtualComponent: function registerVirtualComponent () {
+        var vm = this;
+        def(vm, '_virtualComponents', {});
 
-      // TODO: listen on all events and dispatch them to the
-      // corresponding virtual components according to the componentId.
-      // vm._virtualComponents = {}
-      var createVirtualComponent = function (componentId, propsData) {
-        // create virtual component
-        // const subVm =
-        new VirtualComponent({
-          componentId: componentId,
-          propsData: propsData
-        });
-        // if (vm._virtualComponents) {
-        //   vm._virtualComponents[componentId] = subVm
-        // }
-      };
+        registerComponentHook(
+          String(vm._uid),
+          'lifecycle',
+          'create',
 
-      registerComponentHook(cid, 'lifecycle', 'create', createVirtualComponent);
+          // create virtual component
+          function (componentId, propsData) {
+            var subVm = new VirtualComponent({
+              vmTemplate: vm,
+              componentId: componentId,
+              propsData: propsData
+            });
+            subVm._uid = componentId;
+            if (vm._virtualComponents) {
+              vm._virtualComponents[componentId] = subVm;
+            }
+
+            // send initial data to native
+            return getComponentState(subVm)
+          }
+        );
+      },
+      removeVirtualComponent: function removeVirtualComponent (componentId) {
+        delete this._virtualComponents[componentId];
+      }
     },
-    beforeDestroy: function beforeDestroy () {
+    destroyed: function destroyed () {
       delete this._virtualComponents;
     }
   });
+  vnode.componentOptions.Ctor.prototype._init = initVirtualComponentTemplate;
+  vnode.componentOptions.Ctor.prototype._update = noop;
 }
 
 /*  */
@@ -4753,13 +4843,13 @@ function renderMixin (Vue) {
 
 /*  */
 
-var uid$3 = 0;
+var uid = 0;
 
 function initMixin (Vue) {
   Vue.prototype._init = function (options) {
     var vm = this;
     // a uid
-    vm._uid = uid$3++;
+    vm._uid = uid++;
 
     var startTag, endTag;
     /* istanbul ignore if */
@@ -4892,20 +4982,20 @@ function dedupe (latest, extended, sealed) {
   }
 }
 
-function Vue (options) {
+function Vue$2 (options) {
   if (process.env.NODE_ENV !== 'production' &&
-    !(this instanceof Vue)
+    !(this instanceof Vue$2)
   ) {
     warn('Vue is a constructor and should be called with the `new` keyword');
   }
   this._init(options);
 }
 
-initMixin(Vue);
-stateMixin(Vue);
-eventsMixin(Vue);
-lifecycleMixin(Vue);
-renderMixin(Vue);
+initMixin(Vue$2);
+stateMixin(Vue$2);
+eventsMixin(Vue$2);
+lifecycleMixin(Vue$2);
+renderMixin(Vue$2);
 
 /*  */
 
@@ -5190,11 +5280,11 @@ var KeepAlive = {
     }
     return vnode || (slot && slot[0])
   }
-}
+};
 
 var builtInComponents = {
   KeepAlive: KeepAlive
-}
+};
 
 /*  */
 
@@ -5242,13 +5332,13 @@ function initGlobalAPI (Vue) {
   initAssetRegisters(Vue);
 }
 
-initGlobalAPI(Vue);
+initGlobalAPI(Vue$2);
 
-Object.defineProperty(Vue.prototype, '$isServer', {
+Object.defineProperty(Vue$2.prototype, '$isServer', {
   get: isServerRendering
 });
 
-Object.defineProperty(Vue.prototype, '$ssrContext', {
+Object.defineProperty(Vue$2.prototype, '$ssrContext', {
   get: function get () {
     /* istanbul ignore next */
     return this.$vnode && this.$vnode.ssrContext
@@ -5256,11 +5346,11 @@ Object.defineProperty(Vue.prototype, '$ssrContext', {
 });
 
 // expose FunctionalRenderContext for ssr runtime helper installation
-Object.defineProperty(Vue, 'FunctionalRenderContext', {
+Object.defineProperty(Vue$2, 'FunctionalRenderContext', {
   value: FunctionalRenderContext
 });
 
-Vue.version = '2.5.15';
+Vue$2.version = '2.5.16';
 
 var latestNodeId = 1;
 
@@ -5395,7 +5485,7 @@ var ref = {
   destroy: function destroy (vnode) {
     registerRef(vnode, true);
   }
-}
+};
 
 function registerRef (vnode, isRemoval) {
   var key = vnode.data.ref;
@@ -6236,7 +6326,7 @@ var directives = {
   destroy: function unbindDirectives (vnode) {
     updateDirectives(vnode, emptyNode);
   }
-}
+};
 
 function updateDirectives (oldVnode, vnode) {
   if (oldVnode.data.directives || vnode.data.directives) {
@@ -6347,7 +6437,7 @@ function callHook$1 (dir, hook, vnode, oldVnode, isDestroy) {
 var baseModules = [
   ref,
   directives
-]
+];
 
 /*  */
 
@@ -6390,7 +6480,7 @@ function updateAttrs (oldVnode, vnode) {
 var attrs = {
   create: updateAttrs,
   update: updateAttrs
-}
+};
 
 /*  */
 
@@ -6464,11 +6554,28 @@ function getStyle (oldClassList, classList, ctx) {
 var klass = {
   create: updateClass,
   update: updateClass
-}
+};
 
 /*  */
 
 var target$1;
+var targetContext;
+
+function invokeHandler (invoker, args, context) {
+  if ( context === void 0 ) context = null;
+
+  var fns = invoker.fns;
+  if (Array.isArray(fns)) {
+    var cloned = fns.slice();
+    for (var i = 0; i < cloned.length; i++) {
+      cloned[i].apply(context, args);
+    }
+  } else if (typeof fns === 'function') {
+    return fns.apply(context, args)
+  } else {
+    return invoker.apply(context, args)
+  }
+}
 
 function add$1 (
   event,
@@ -6494,6 +6601,30 @@ function add$1 (
       }
     };
   }
+
+  // create virtual component template handler
+  if (targetContext && targetContext._virtualComponents) {
+    target$1._context = targetContext;
+    var formerHandler = handler;
+    handler = function virtualHandler () {
+      var args = [], len = arguments.length;
+      while ( len-- ) args[ len ] = arguments[ len ];
+
+      var componentId = (args[0] || {}).componentId;
+      var context = this._context;
+      if (componentId && this._context) {
+        var vcs = this._context._virtualComponents || {};
+        context = vcs[componentId] || context;
+      }
+      try {
+        // console.log(' -> invoke virtual handler', args)
+        invokeHandler(formerHandler, args, context);
+      } catch (err) {
+        handleError(err, context, ("Failed to invoke virtual component handler (" + componentId + ")"));
+      }
+    };
+  }
+
   target$1.addEvent(event, handler, params);
 }
 
@@ -6513,14 +6644,16 @@ function updateDOMListeners (oldVnode, vnode) {
   var on = vnode.data.on || {};
   var oldOn = oldVnode.data.on || {};
   target$1 = vnode.elm;
+  targetContext = vnode.context;
   updateListeners(on, oldOn, add$1, remove$2, vnode.context);
   target$1 = undefined;
+  targetContext = undefined;
 }
 
 var events = {
   create: updateDOMListeners,
   update: updateDOMListeners
-}
+};
 
 /*  */
 
@@ -6603,7 +6736,7 @@ function toObject$1 (arr) {
 var style = {
   create: createStyle,
   update: updateStyle
-}
+};
 
 /*  */
 
@@ -6679,7 +6812,7 @@ var transition = {
   create: enter,
   activate: enter,
   remove: leave
-}
+};
 
 function enter (_, vnode) {
   var el = vnode.elm;
@@ -6943,7 +7076,7 @@ var platformModules = [
   events,
   style,
   transition
-]
+];
 
 /*  */
 
@@ -6958,7 +7091,143 @@ var patch = createPatchFunction({
 });
 
 var platformDirectives = {
+};
+
+/*  */
+
+var arrayKeys$1 = Object.getOwnPropertyNames(arrayMethods);
+
+/**
+ * Get method from Weex native component.
+ */
+function getComponentMethod (vm, name) {
+  var element = vm.$el;
+  if (element && typeof element[name] === 'function') {
+    return function () {
+      var args = [], len = arguments.length;
+      while ( len-- ) args[ len ] = arguments[ len ];
+
+      return element[name].apply(element, args);
+    }
+  }
+  warn(("Can't find component method \"" + name + "\" on " + (element.type)));
+  return noop
 }
+
+/**
+ * Intercept mutating array methods and call the corresponding
+ * method which provided by Weex native component.
+ */
+function interceptArrayMethods (vm, array) {
+  var loop = function ( i, n ) {
+    var key = arrayKeys$1[i];
+    def(array, key, function recycleListArrayProxy () {
+      var args = [], len = arguments.length;
+      while ( len-- ) args[ len ] = arguments[ len ];
+
+      var length = this.length;
+
+      // update the array and notify changes
+      var method = arrayMethods[key];
+      if (typeof method === 'function') {
+        method.apply(this, args);
+      }
+
+      // send mutations to native
+      var remove$$1 = getComponentMethod(vm, 'removeData');
+      var insert = getComponentMethod(vm, 'insertRange');
+      var update = getComponentMethod(vm, 'setListData');
+      switch (key) {
+        case 'push': insert(length, args); break
+        case 'pop': remove$$1(length - 1, 1); break
+        case 'shift': remove$$1(0, 1); break
+        case 'unshift': insert(0, args); break
+        case 'splice': {
+          var start = args[0];
+          var count = args[1];
+          var items = args.slice(2);
+          count > 0 && remove$$1(start, count);
+          items.length > 0 && insert(start, items);
+        } break
+        case 'sort': update(this.slice()); break
+        case 'reverse': update(this.slice()); break
+      }
+    });
+  };
+
+  for (var i = 0, n = arrayKeys$1.length; i < n; i++) loop( i, n );
+}
+
+/**
+ * Deep watch the array and convert the operations into
+ * Weex native directives.
+ */
+function watchArray (vm, array) {
+  if (!Array.isArray(array)) {
+    return
+  }
+  interceptArrayMethods(vm, array);
+
+  // deep watch all array items
+  array.forEach(function (item, index) {
+    if (isPlainObject(item) && !hasOwn(item, '[[Watched]]')) {
+      def(item, '[[Watched]]', true);
+      vm.$watch(
+        // visit all keys in item
+        function () { for (var k in item) { !item[k]; } },
+
+        // send new item data to native
+        function () {
+          var update = getComponentMethod(vm, 'updateData');
+          update(array.indexOf(item), item);
+        },
+        { deep: true }
+      );
+    }
+  });
+}
+
+var RecycleList = {
+  name: 'recycle-list',
+  render: function render (h) {
+    var this$1 = this;
+
+    if (this._vnode && this.$options['[[UseCache]]']) {
+      def(this.$options, '[[UseCache]]', false);
+      return this._vnode
+    }
+
+    var parent = this.$options.parent;
+    var exp = this.$attrs.bindingExpression;
+    if (parent && exp) {
+      // prevent the re-render which caused by the binding list data
+      parent.$watch(
+        exp,
+        function () { return def(this$1.$options, '[[UseCache]]', true); },
+        { deep: true, immediate: true }
+      );
+
+      // watch the list data and send operations to native
+      watchArray(this, this.$attrs.listData);
+      parent.$watch(exp, function (newList) {
+        watchArray(this$1, newList);
+      });
+    }
+
+    return h('weex:recycle-list', {
+      on: this._events
+    }, this.$slots.default)
+  },
+  renderError: function renderError (h, err) {
+    return h('text', {
+      style: {
+        fontSize: '36px',
+        color: '#FF0000'
+      },
+      value: err.toString()
+    })
+  }
+};
 
 /*  */
 
@@ -7043,7 +7312,7 @@ var Richtext = {
       }
     })
   }
-}
+};
 
 /*  */
 
@@ -7115,7 +7384,7 @@ function isSameChild (child, oldChild) {
   return oldChild.key === child.key && oldChild.tag === child.tag
 }
 
-var Transition = {
+var Transition$1 = {
   name: 'transition',
   props: transitionProps,
   abstract: true,
@@ -7232,7 +7501,7 @@ var Transition = {
 
     return rawChild
   }
-}
+};
 
 // reuse same transition component logic from web
 
@@ -7316,7 +7585,7 @@ var TransitionGroup = {
       this._vnode,
       this.kept,
       false, // hydrating
-      true // removeOnly (!important, avoids unnecessary moves)
+      true // removeOnly (!important avoids unnecessary moves)
     );
     this._vnode = this.kept;
   },
@@ -7369,7 +7638,7 @@ var TransitionGroup = {
       return stylesheet['@TRANSITION'] && stylesheet['@TRANSITION'][moveClass]
     }
   }
-}
+};
 
 // function callPendingCbs (c) {
 //   /* istanbul ignore if */
@@ -7383,10 +7652,11 @@ var TransitionGroup = {
 // }
 
 var platformComponents = {
+  RecycleList: RecycleList,
   Richtext: Richtext,
-  Transition: Transition,
+  Transition: Transition$1,
   TransitionGroup: TransitionGroup
-}
+};
 
 /*  */
 
@@ -7442,20 +7712,20 @@ function query (el, document) {
 /*  */
 
 // install platform specific utils
-Vue.config.mustUseProp = mustUseProp;
-Vue.config.isReservedTag = isReservedTag$1;
-Vue.config.isRuntimeComponent = isRuntimeComponent;
-Vue.config.isUnknownElement = isUnknownElement$1;
+Vue$2.config.mustUseProp = mustUseProp;
+Vue$2.config.isReservedTag = isReservedTag$1;
+Vue$2.config.isRuntimeComponent = isRuntimeComponent;
+Vue$2.config.isUnknownElement = isUnknownElement$1;
 
 // install platform runtime directives and components
-Vue.options.directives = platformDirectives;
-Vue.options.components = platformComponents;
+Vue$2.options.directives = platformDirectives;
+Vue$2.options.components = platformComponents;
 
 // install platform patch function
-Vue.prototype.__patch__ = patch;
+Vue$2.prototype.__patch__ = patch;
 
 // wrap mount
-Vue.prototype.$mount = function (
+Vue$2.prototype.$mount = function (
   el,
   hydrating
 ) {
@@ -7469,6 +7739,6 @@ Vue.prototype.$mount = function (
 // this entry is built and wrapped with a factory function
 // used to generate a fresh copy of Vue for every Weex instance.
 
-exports.Vue = Vue;
+exports.Vue = Vue$2;
 
 }
