@@ -3,6 +3,7 @@
 import { arrayMethods } from 'core/observer/array'
 import { def, warn, noop } from 'core/util/index'
 import { hasOwn, isPlainObject } from 'shared/util'
+import { registerListRef } from '../../util/index'
 
 const arrayKeys = Object.getOwnPropertyNames(arrayMethods)
 
@@ -108,6 +109,13 @@ export default {
         watchArray(this, newList)
       })
     }
+
+    this._events['_attach_slot'] =
+      instance => registerListRef(this, instance.position, instance.refs)
+    this._events['_update_slot'] =
+      instance => registerListRef(this, instance.position, instance.refs)
+    this._events['_detach_slot'] =
+      instance => registerListRef(this, instance.position, instance.refs, true)
 
     return h('weex:recycle-list', {
       on: this._events

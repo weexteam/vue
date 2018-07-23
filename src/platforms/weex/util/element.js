@@ -24,7 +24,7 @@ export const canBeLeftOpenTag = makeMap(
 )
 
 export const isRuntimeComponent = makeMap(
-  'richtext,transition,transition-group',
+  'richtext,transition,transition-group,recycle-list',
   true
 )
 

@@ -11,7 +11,7 @@ import { initEvents } from 'core/instance/events'
 import { initProvide, initInjections } from 'core/instance/inject'
 import { initLifecycle, callHook } from 'core/instance/lifecycle'
 import { initInternalComponent, resolveConstructorOptions } from 'core/instance/init'
-import { registerComponentHook, updateComponentData } from '../../util/index'
+import { registerComponentHook, updateComponentData, updateVirtualRef } from '../../util/index'
 
 let uid = 0
 
@@ -74,7 +74,9 @@ function initVirtualComponent (options: Object = {}) {
   initProvide(vm) // resolve provide after data/props
   callHook(vm, 'created')
 
-  registerComponentHook(componentId, 'lifecycle', 'attach', () => {
+  registerComponentHook(componentId, 'lifecycle', 'attach', instance => {
+    updateVirtualRef(vm, instance.refs)
+
     callHook(vm, 'beforeMount')
 
     new Watcher(
@@ -87,7 +89,8 @@ function initVirtualComponent (options: Object = {}) {
     callHook(vm, 'mounted')
   })
 
-  registerComponentHook(componentId, 'lifecycle', 'update', () => {
+  registerComponentHook(componentId, 'lifecycle', 'update', instance => {
+    updateVirtualRef(vm, instance.refs)
     vm._update(vm._vnode, false)
   })
 
@@ -105,7 +108,8 @@ function initVirtualComponent (options: Object = {}) {
     }
   )
 
-  registerComponentHook(componentId, 'lifecycle', 'detach', () => {
+  registerComponentHook(componentId, 'lifecycle', 'detach', instance => {
+    updateVirtualRef(vm, instance.refs, true)
     vm.$destroy()
     if (vm._vmTemplate) {
       // $flow-disable-line
