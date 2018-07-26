@@ -84,5 +84,6 @@ export function registerListRef (vm: Component, position: number, refsMap: Objec
         vmRef[key] = refs
       }
     })
+    vm.$refs = vmRef
   }
 }

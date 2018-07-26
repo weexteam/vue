@@ -111,11 +111,11 @@ export default {
     }
 
     this._events['_attach_slot'] =
-      instance => registerListRef(this, instance.position, instance.refs)
+      instance => registerListRef(this.$parent || this, instance.position, instance.refs)
     this._events['_update_slot'] =
-      instance => registerListRef(this, instance.position, instance.refs)
+      instance => registerListRef(this.$parent || this, instance.position, instance.refs)
     this._events['_detach_slot'] =
-      instance => registerListRef(this, instance.position, instance.refs, true)
+      instance => registerListRef(this.$parent || this, instance.position, instance.refs, true)
 
     return h('weex:recycle-list', {
       on: this._events
