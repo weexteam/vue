@@ -110,12 +110,15 @@ export default {
       })
     }
 
-    this._events['_attach_slot'] =
-      instance => registerListRef(this.$parent || this, instance.position, instance.refs)
-    this._events['_update_slot'] =
-      instance => registerListRef(this.$parent || this, instance.position, instance.refs)
-    this._events['_detach_slot'] =
-      instance => registerListRef(this.$parent || this, instance.position, instance.refs, true)
+    this._events['_attach_slot'] = (instance: WeexComponentHookInstance) => {
+      registerListRef(this.$parent || this, instance.position, instance.refs)
+    }
+    this._events['_update_slot'] = (instance: WeexComponentHookInstance) => {
+      registerListRef(this.$parent || this, instance.position, instance.refs)
+    }
+    this._events['_detach_slot'] = (instance: WeexComponentHookInstance) => {
+      registerListRef(this.$parent || this, instance.position, instance.refs, true)
+    }
 
     return h('weex:recycle-list', {
       on: this._events

@@ -120,3 +120,17 @@ declare type WeexCompilerOptions = CompilerOptions & {
 declare type WeexCompiledResult = CompiledResult & {
   '@render'?: string;
 };
+
+declare type WeexVirtalElement = {
+  attrs: Object;
+  type: string;
+  vRef: string;
+}
+
+declare type WeexComponentHookInstance = {
+  virtualComponentId?: string;
+  position: number;
+  refs: {
+    [string]: Array<WeexVirtalElement>
+  }
+}

@@ -74,25 +74,27 @@ function initVirtualComponent (options: Object = {}) {
   initProvide(vm) // resolve provide after data/props
   callHook(vm, 'created')
 
-  registerComponentHook(componentId, 'lifecycle', 'attach', instance => {
-    updateVirtualRef(vm, instance && instance.refs)
+  registerComponentHook(componentId, 'lifecycle', 'attach',
+    (instance: WeexComponentHookInstance) => {
+      updateVirtualRef(vm, instance && instance.refs)
 
-    callHook(vm, 'beforeMount')
+      callHook(vm, 'beforeMount')
 
-    new Watcher(
-      vm,
-      () => getComponentState(vm),
-      () => vm._update(vm._vnode, false)
-    )
+      new Watcher(
+        vm,
+        () => getComponentState(vm),
+        () => vm._update(vm._vnode, false)
+      )
 
-    vm._isMounted = true
-    callHook(vm, 'mounted')
-  })
+      vm._isMounted = true
+      callHook(vm, 'mounted')
+    })
 
-  registerComponentHook(componentId, 'lifecycle', 'update', instance => {
-    updateVirtualRef(vm, instance && instance.refs)
-    vm._update(vm._vnode, false)
-  })
+  registerComponentHook(componentId, 'lifecycle', 'update',
+    (instance: WeexComponentHookInstance) => {
+      updateVirtualRef(vm, instance && instance.refs)
+      vm._update(vm._vnode, false)
+    })
 
   registerComponentHook(
     componentId,
@@ -108,15 +110,16 @@ function initVirtualComponent (options: Object = {}) {
     }
   )
 
-  registerComponentHook(componentId, 'lifecycle', 'detach', instance => {
-    updateVirtualRef(vm, instance && instance.refs, true)
-    vm.$destroy()
-    if (vm._vmTemplate) {
+  registerComponentHook(componentId, 'lifecycle', 'detach',
+    (instance: WeexComponentHookInstance) => {
+      updateVirtualRef(vm, instance && instance.refs, true)
+      vm.$destroy()
+      if (vm._vmTemplate) {
       // $flow-disable-line
-      vm._vmTemplate.removeVirtualComponent(vm._uid)
-      delete vm._vmTemplate
-    }
-  })
+        vm._vmTemplate.removeVirtualComponent(vm._uid)
+        delete vm._vmTemplate
+      }
+    })
 }
 
 // override Vue.prototype._update
