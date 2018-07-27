@@ -128,6 +128,15 @@ function omitUseless (object, parentKey) {
         (isEmptyObject(object[key]) || object[key] === undefined)) {
         delete object[key]
       }
+      if (key === 'event' && Array.isArray(object[key])) {
+        object.event = object.event.filter(name => {
+          return name !== '_attach_slot' && name !== '_update_slot' &&
+            name !== '_detach_slot'
+        })
+        if (!object.event.length) {
+          delete object.event
+        }
+      }
     }
   }
   return object
@@ -144,7 +153,10 @@ export function getEvents (instance) {
     if (!node) { return }
     if (Array.isArray(node.event)) {
       node.event.forEach(type => {
-        events.push({ ref: node.ref, type })
+        if (type !== '_attach_slot' && type !== '_update_slot' &&
+        type !== '_detach_slot') {
+          events.push({ ref: node.ref, type })
+        }
       })
     }
     if (Array.isArray(node.children)) {
