@@ -124,7 +124,8 @@ declare type WeexCompiledResult = CompiledResult & {
 declare type WeexVirtalElement = {
   attrs: Object;
   type: string;
-  vRef: string;
+  ref: string;
+  '[[VirtualElement]]': true;
 }
 
 declare type WeexComponentHookInstance = {

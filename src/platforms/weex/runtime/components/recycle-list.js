@@ -113,9 +113,6 @@ export default {
     this._events['_attach_slot'] = (instance: WeexComponentHookInstance) => {
       registerListRef(this.$parent || this, instance.position, instance.refs)
     }
-    this._events['_update_slot'] = (instance: WeexComponentHookInstance) => {
-      registerListRef(this.$parent || this, instance.position, instance.refs)
-    }
     this._events['_detach_slot'] = (instance: WeexComponentHookInstance) => {
       registerListRef(this.$parent || this, instance.position, instance.refs, true)
     }

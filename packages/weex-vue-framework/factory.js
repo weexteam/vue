@@ -4121,6 +4121,55 @@ function updateComponentData (
   warn(("Failed to update component data (" + componentId + ")."));
 }
 
+function updateVirtualRef (vm, refsMap, isRemoval) {
+  if (!isObject(refsMap)) { return }
+
+  if (isRemoval) {
+    vm.$refs = {};
+  } else {
+    var vmRef = vm.$refs || {};
+    Object.keys(refsMap).forEach(function (key) {
+      var refs = refsMap[key];
+      vmRef[key] = refs.length === 1 ? refs[0] : refs;
+    });
+    vm.$refs = vmRef;
+  }
+}
+
+function registerListRef (vm, position, refsMap, isRemoval) {
+  if (!isObject(refsMap)) { return }
+
+  var vmRef = vm.$refs || {};
+  if (isRemoval) {
+    Object.keys(refsMap).forEach(function (key) {
+      var refs = refsMap[key];
+
+      if (vmRef[key]) {
+        if (refs.length === 1 && Array.isArray(vmRef[key])) {
+          delete vmRef[key][position];
+        } else {
+          delete vmRef[key];
+        }
+      }
+    });
+  } else {
+    Object.keys(refsMap).forEach(function (key) {
+      var refs = refsMap[key];
+
+      if (refs.length === 1) {
+        if (!Array.isArray(vmRef[key])) {
+          vmRef[key] = [];
+        }
+        // $flow-disable-line
+        vmRef[key][position] = refs[0];
+      } else {
+        vmRef[key] = refs;
+      }
+    });
+    vm.$refs = vmRef;
+  }
+}
+
 /*  */
 
 // https://github.com/Hanks10100/weex-native-directive/tree/master/component
@@ -4188,22 +4237,27 @@ function initVirtualComponent (options) {
   initProvide(vm); // resolve provide after data/props
   callHook(vm, 'created');
 
-  registerComponentHook(componentId, 'lifecycle', 'attach', function () {
-    callHook(vm, 'beforeMount');
+  registerComponentHook(componentId, 'lifecycle', 'attach',
+    function (instance) {
+      updateVirtualRef(vm, instance && instance.refs);
 
-    new Watcher(
-      vm,
-      function () { return getComponentState(vm); },
-      function () { return vm._update(vm._vnode, false); }
-    );
+      callHook(vm, 'beforeMount');
 
-    vm._isMounted = true;
-    callHook(vm, 'mounted');
-  });
+      new Watcher(
+        vm,
+        function () { return getComponentState(vm); },
+        function () { return vm._update(vm._vnode, false); }
+      );
 
-  registerComponentHook(componentId, 'lifecycle', 'update', function () {
-    vm._update(vm._vnode, false);
-  });
+      vm._isMounted = true;
+      callHook(vm, 'mounted');
+    });
+
+  registerComponentHook(componentId, 'lifecycle', 'update',
+    function (instance) {
+      updateVirtualRef(vm, instance && instance.refs);
+      vm._update(vm._vnode, false);
+    });
 
   registerComponentHook(
     componentId,
@@ -4219,14 +4273,16 @@ function initVirtualComponent (options) {
     }
   );
 
-  registerComponentHook(componentId, 'lifecycle', 'detach', function () {
-    vm.$destroy();
-    if (vm._vmTemplate) {
+  registerComponentHook(componentId, 'lifecycle', 'detach',
+    function (instance) {
+      updateVirtualRef(vm, instance && instance.refs, true);
+      vm.$destroy();
+      if (vm._vmTemplate) {
       // $flow-disable-line
-      vm._vmTemplate.removeVirtualComponent(vm._uid);
-      delete vm._vmTemplate;
-    }
-  });
+        vm._vmTemplate.removeVirtualComponent(vm._uid);
+        delete vm._vmTemplate;
+      }
+    });
 }
 
 // override Vue.prototype._update
@@ -7214,6 +7270,16 @@ var RecycleList = {
       });
     }
 
+    this._events['_attach_slot'] = function (instance) {
+      registerListRef(this$1.$parent || this$1, instance.position, instance.refs);
+    };
+    this._events['_update_slot'] = function (instance) {
+      registerListRef(this$1.$parent || this$1, instance.position, instance.refs);
+    };
+    this._events['_detach_slot'] = function (instance) {
+      registerListRef(this$1.$parent || this$1, instance.position, instance.refs, true);
+    };
+
     return h('weex:recycle-list', {
       on: this._events
     }, this.$slots.default)
@@ -7682,7 +7748,7 @@ var canBeLeftOpenTag = makeMap(
 );
 
 var isRuntimeComponent = makeMap(
-  'richtext,transition,transition-group',
+  'richtext,transition,transition-group,recycle-list',
   true
 );
 
