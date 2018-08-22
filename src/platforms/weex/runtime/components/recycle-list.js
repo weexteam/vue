@@ -87,6 +87,23 @@ function watchArray (vm: Component, array: Array<any>) {
 
 export default {
   name: 'recycle-list',
+  methods: {
+    closest (...args: Array<any>) {
+      return this.$el.closest(...args)
+    },
+    queryElement (...args: Array<any>) {
+      return this.$el.queryElement(...args)
+    },
+    queryElementAll (...args: Array<any>) {
+      return this.$el.queryElementAll(...args)
+    },
+    scrollToElement (...args: Array<any>) {
+      return this.$el.scrollToElement(...args)
+    },
+    resetLoadmore (...args: Array<any>) {
+      return this.$el.resetLoadmore(...args)
+    }
+  },
   render (h: Function) {
     if (this._vnode && this.$options['[[UseCache]]']) {
       def(this.$options, '[[UseCache]]', false)
