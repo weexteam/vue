@@ -14,6 +14,11 @@ import {
   isUnknownElement
 } from 'weex/util/element'
 
+import internalMixin from './mixin'
+
+// register internal mixin
+Vue.mixin(internalMixin)
+
 // install platform specific utils
 Vue.config.mustUseProp = mustUseProp
 Vue.config.isReservedTag = isReservedTag
