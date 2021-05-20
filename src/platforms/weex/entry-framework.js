@@ -25,12 +25,7 @@ export function createInstanceContext (
   // Each instance has a independent `Vue` module instance
   const Vue = instance.Vue = createVueModuleInstance(instanceId, weex)
 
-  // DEPRECATED
-  const timerAPIs = getInstanceTimer(instanceId, weex.requireModule)
-
-  const instanceContext = Object.assign({ Vue }, timerAPIs)
-  Object.freeze(instanceContext)
-  return instanceContext
+  return { Vue }
 }
 
 /**
@@ -144,44 +139,4 @@ function createVueModuleInstance (
   }
 
   return Vue
-}
-
-/**
- * DEPRECATED
- * Generate HTML5 Timer APIs. An important point is that the callback
- * will be converted into callback id when sent to native. So the
- * framework can make sure no side effect of the callback happened after
- * an instance destroyed.
- */
-function getInstanceTimer (
-  instanceId: string,
-  moduleGetter: Function
-): Object {
-  const instance = instanceOptions[instanceId]
-  const timer = moduleGetter('timer')
-  const timerAPIs = {
-    setTimeout: (...args) => {
-      const handler = function () {
-        args[0](...args.slice(2))
-      }
-
-      timer.setTimeout(handler, args[1])
-      return instance.document.taskCenter.callbackManager.lastCallbackId.toString()
-    },
-    setInterval: (...args) => {
-      const handler = function () {
-        args[0](...args.slice(2))
-      }
-
-      timer.setInterval(handler, args[1])
-      return instance.document.taskCenter.callbackManager.lastCallbackId.toString()
-    },
-    clearTimeout: (n) => {
-      timer.clearTimeout(n)
-    },
-    clearInterval: (n) => {
-      timer.clearInterval(n)
-    }
-  }
-  return timerAPIs
 }
